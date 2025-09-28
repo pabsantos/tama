@@ -8,6 +8,9 @@ format:
   html:
     toc: true
     number-sections: true
+    fig-cap-location: margin
+execute:
+  fig-keep: last
 ---
 
 ```{python}
@@ -16,6 +19,10 @@ format:
 import pandas as pd
 import os
 import geopandas as gpd
+import plotly.express as px
+from statsmodels.graphics.tsaplots import plot_acf
+import matplotlib.pyplot as plt
+
 ```
 
 ## Introdução
@@ -35,15 +42,21 @@ df_precipitacao.head()
 ### Tratamento
 
 ```{python}
-df_precipitacao.nomeEstacao.unique().size
+estacoes = df_precipitacao.nomeEstacao.unique().size
 ```
+
+`{python} f"{estacoes}"`
 
 ```{python}
 #| warning: false
 #| message: false
 df_local_estacoes = df_precipitacao.drop_duplicates(subset="nomeEstacao")
-df_local_estacoes.latitude = pd.to_numeric(df_local_estacoes.latitude.str.replace(",", "."))
-df_local_estacoes.longitude = pd.to_numeric(df_local_estacoes.longitude.str.replace(",", "."))
+df_local_estacoes.latitude = pd.to_numeric(
+    df_local_estacoes.latitude.str.replace(",", ".")
+)
+df_local_estacoes.longitude = pd.to_numeric(
+    df_local_estacoes.longitude.str.replace(",", ".")
+)
 
 estacoes = gpd.GeoDataFrame(
     df_local_estacoes, 
@@ -58,23 +71,90 @@ estacoes[["nomeEstacao", "geometry"]].explore(tiles="CartoDB positron")
 ```
 
 ```{python}
+
 df_precipitacao[["data", "hora"]] = df_precipitacao.datahora.str.split(" ", expand=True)
-df_precipitacao.valorMedida = pd.to_numeric(df_precipitacao.valorMedida.str.replace(",", "."))
+df_precipitacao.valorMedida = pd.to_numeric(
+    df_precipitacao.valorMedida.str.replace(",", ".")
+)
 
 df_diario = (
     df_precipitacao[df_precipitacao.nomeEstacao == "Centro "]
     .groupby('data')
-    .agg(prec_acum=('valorMedida', 'sum'))
+    .agg(acumulado=('valorMedida', 'sum'))
     .reset_index()
 )
+
+df_diario.data = pd.to_datetime(df_diario.data)
 
 df_diario.head(n=10)
 ```
 
 ## Análise exploratória
 
-### Distribuição
-
 ### Série temporal
 
-## Sazonalidade
+```{python}
+#| label: fig-timeseries
+
+px.line(
+    df_diario, 
+    x="data", 
+    y="acumulado", 
+    labels={"data": "", "acumulado": "Precipitação (mm)"},
+    title="Precipitação diária na cidade de SP - Estação 'Centro'"
+)
+
+```
+
+### Distribuição
+
+```{python}
+min = min(df_diario.acumulado)
+max = max(df_diario.acumulado)
+mean = df_diario.acumulado.mean()
+median = df_diario.acumulado.median()
+std = df_diario.acumulado.std()
+```
+
+- Mínima: `{python} f"{min:.2f} mm"`
+- Máxima: `{python} f"{max:.2f} mm"`
+- Média `{python} f"{mean:.2f} mm"`
+- Mediana `{python} f"{median:.2f} mm"`
+- Desvio padrão: `{python} f"{std:.2f} mm"`
+
+```{python}
+(
+    px.histogram(
+        df_diario,
+        x="acumulado",
+        log_y=True,
+        labels={"acumulado": "Precipitação acumulada (mm)"},
+        title="Distribuição da precipitação diária acumulada"
+    )
+    .update_traces(marker_line_color="white", marker_line_width=1)
+)
+```
+
+```{python}
+df_diario["mes"] = df_diario.data.dt.strftime('%Y-%m')
+
+px.box(
+    df_diario,
+    x="mes",
+    y="acumulado",
+    labels={"mes": "", "acumulado": "Precipitação (mm)"},
+    title="Distribuição da precipitação diária acumulada por mês"
+)
+```
+
+## Autocorrelação
+
+
+```{python}
+#| label: fig-acf
+#| fig-cap: Análise de autocorrelação (ACF)
+
+fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
+plot_acf(df_diario.acumulado, title="", ax=ax)
+ax.tick_params(labelsize=8)
+```
