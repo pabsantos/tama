@@ -9,27 +9,34 @@ format:
     toc: true
     number-sections: true
     fig-cap-location: margin
+    code-links:
+      - text: Repositório
+        icon: github
 execute:
   fig-keep: last
 ---
 
+## Introdução
+
+O presente relatório apresenta uma breve análise descritiva de uma série histórica de precipitação na cidade de São Paulo. A análise foi elaborada com auxílio das seguintes bibliotécas:
+
 ```{python}
 #| label: setup
-#| include: false
+
 import pandas as pd
 import os
 import geopandas as gpd
 import plotly.express as px
 from statsmodels.graphics.tsaplots import plot_acf
 import matplotlib.pyplot as plt
-
 ```
-
-## Introdução
 
 ## Dados
 
 ### Coleta
+
+Os dados utilizados foram coletados do [Mapa Interativo da Rede Observacional para Monitoramento de Risco de Desastres Naturais do Cemaden](https://mapainterativo.cemaden.gov.br). Foram extraídos os dados de estações pluviométricas da cidade de São Paulo, considerando o período entre 07/2024 e 06/2025.
+
 ```{python}
 file_list = os.listdir('data/')
 path_list = ["data/" + file for file in file_list]
@@ -41,11 +48,13 @@ df_precipitacao.head()
 
 ### Tratamento
 
+Primeiro foi investigada a quantidade de estações em São Paulo.
+
 ```{python}
 estacoes = df_precipitacao.nomeEstacao.unique().size
 ```
 
-`{python} f"{estacoes}"`
+Foram identificadas `{python} f"{estacoes}"` estações pluviométricas na cidade. Decidiu-se por focar a análise dos dados coletados pela estação "Centro".
 
 ```{python}
 #| warning: false
@@ -70,6 +79,8 @@ estacoes = gpd.GeoDataFrame(
 estacoes[["nomeEstacao", "geometry"]].explore(tiles="CartoDB positron")
 ```
 
+Em seguida, o atributo "datahora" foi dividido em duas colunas distintas, possibilitando o cálculo da precipitação acumulada por dia. Originalmente, o registro dos dados foi realizado em uma frequência horária quando o valor da precipitação foi 0.00 mm e em momentos de precipitação acima de 0, observou-se que o registro foi realizado em uma frequência de 10 minutos. 
+
 ```{python}
 
 df_precipitacao[["data", "hora"]] = df_precipitacao.datahora.str.split(" ", expand=True)
@@ -93,20 +104,24 @@ df_diario.head(n=10)
 
 ### Série temporal
 
+A @fig-timeseries apresenta a série temporal diária dos dados. O primeiro ponto de atenção é a falta de dados em alguns períodos. Foi observada a falta de registros nos períodos entre 2024-07-29 e 2024-08-09, 2024-08-10 e 2024-08-24, e 2024-11-13 e 2024-11-29. As datas de 2024-12-21, 2025-02-01 e 2025-02-18 destacam-se pelos maiores valores de precipitação acumulada, com valores de 77.67 mm, 85.72 mm e 53.87 mm, respectivamente.
+
 ```{python}
 #| label: fig-timeseries
+#| fig-cap: Precipitação diária na cidade de SP - Estação "Centro"
 
 px.line(
     df_diario, 
     x="data", 
     y="acumulado", 
-    labels={"data": "", "acumulado": "Precipitação (mm)"},
-    title="Precipitação diária na cidade de SP - Estação 'Centro'"
+    labels={"data": "", "acumulado": "Precipitação (mm)"}
 )
 
 ```
 
 ### Distribuição
+
+A seguir foram extraídas algumas estatísticas descritivas com base nos dados diários. Grande parte dos dias não apresentaram dados de precipitação, visto que a mediana também apresentou um valor de 0.00 mm.
 
 ```{python}
 min = min(df_diario.acumulado)
@@ -122,39 +137,53 @@ std = df_diario.acumulado.std()
 - Mediana `{python} f"{median:.2f} mm"`
 - Desvio padrão: `{python} f"{std:.2f} mm"`
 
+A @fig-hist apresenta a distribuição desses valores, trazendo uma referência visual para os resultados apresentados anteriormente.
+
 ```{python}
+#| label: fig-hist
+#| fig-cap: Distribuiçào da precipitação diária acumulada
 (
     px.histogram(
         df_diario,
         x="acumulado",
         log_y=True,
-        labels={"acumulado": "Precipitação acumulada (mm)"},
-        title="Distribuição da precipitação diária acumulada"
+        labels={"acumulado": "Precipitação acumulada (mm)"}
     )
     .update_traces(marker_line_color="white", marker_line_width=1)
 )
 ```
 
+A @fig-box apresenta a distribuição da precipitação diária agrupada por mês. fevereiro de 2025 apresentou a maior máxima (85.72 mm) e o maior q3 (9.96 mm). Novembro de 2024 foi o mês com a maior mediana (2.27 mm).
+
 ```{python}
+#| label: fig-box
+#| fig-cap: Distribuiçào da precipitação diária acumulada por mês
+
 df_diario["mes"] = df_diario.data.dt.strftime('%Y-%m')
 
 px.box(
     df_diario,
     x="mes",
     y="acumulado",
-    labels={"mes": "", "acumulado": "Precipitação (mm)"},
-    title="Distribuição da precipitação diária acumulada por mês"
+    labels={"mes": "", "acumulado": "Precipitação (mm)"}
 )
 ```
 
 ## Autocorrelação
 
+Por fim, a @fig-acf apresenta uma breve análise de autocorrelação da série diária, com lags de até 60 dias. Os lags de 1, 4, 13, 42, 55 se destacam por apresentarem valores de autocorrelação acima de 0.10.
 
 ```{python}
 #| label: fig-acf
 #| fig-cap: Análise de autocorrelação (ACF)
+#| fig-width: 10
+#| fig-height: 5
 
-fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
-plot_acf(df_diario.acumulado, title="", ax=ax)
-ax.tick_params(labelsize=8)
+fig, ax = plt.subplots()
+plot_acf(df_diario.acumulado, title="", ax=ax, lags=60)
+ax.tick_params(labelsize=9)
+ax.set_xlabel("lag (dias)")
+ax.set_ylabel("Autocorrelação")
+ax.grid(True)
+plt.show()
 ```
