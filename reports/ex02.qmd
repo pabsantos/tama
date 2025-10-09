@@ -1,0 +1,128 @@
+---
+title: "Exercício 02"
+subtitle: "Tópicos Avançados em Modelagem Ambiental - CAP INPE"
+date: 2025-10-10
+author: Pedro Borges
+lang: pt-BR
+format: 
+  html:
+    toc: true
+    number-sections: true
+    fig-cap-location: margin
+    code-links:
+      - text: Repositório
+        icon: github
+execute:
+  fig-keep: last
+  warning: false
+---
+
+## Introdução
+
+```{python}
+import os
+import pandas as pd
+import numpy as np
+import plotly.express as px
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+```
+
+## Dados
+
+```{python}
+data_folder = "../data/"
+file_list = os.listdir(data_folder)
+path_list = [data_folder + file for file in file_list]
+df_list = [pd.read_csv(file, sep=";") for file in path_list]
+df_precipitacao = pd.concat(df_list)
+
+df_precipitacao[["data", "hora"]] = df_precipitacao.datahora.str.split(" ", expand=True)
+df_precipitacao.valorMedida = pd.to_numeric(
+    df_precipitacao.valorMedida.str.replace(",", ".")
+)
+
+df_diario = (
+    df_precipitacao[df_precipitacao.nomeEstacao == "Centro "]
+    .groupby("data")
+    .agg(acumulado=("valorMedida", "sum"))
+    .reset_index()
+)
+
+df_diario.data = pd.to_datetime(df_diario.data)
+
+data_inicial = df_diario.data.min()
+data_final = df_diario.data.max()
+date_range = pd.date_range(start=data_inicial, end=data_final, freq="D")
+df_base = pd.DataFrame({"data": date_range})
+df_diario_clean = pd.merge(df_base, df_diario, how="left", on="data").fillna(0)
+```
+
+```{python}
+# | label: fig-timeseries
+# | fig-cap: Precipitação diária na cidade de SP - Estação "Centro"
+
+px.line(
+    df_diario_clean,
+    x="data",
+    y="acumulado",
+    labels={"data": "", "acumulado": "Precipitação (mm)"},
+)
+
+```
+
+## Modelo
+
+```{python}
+df_diario_clean["lag1"] = df_diario_clean.acumulado.shift(1)
+df_diario_clean["rm3"] = df_diario_clean.acumulado.rolling(window=3).mean().shift(1)
+
+df_model = df_diario_clean.dropna()
+```
+
+
+```{python}
+X = df_model[["lag1", "rm3"]]
+y = df_model.acumulado
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    shuffle=False,
+    random_state=42,
+)
+
+rf_model = RandomForestRegressor()
+rf_model.fit(X_train, y_train)
+y_pred = rf_model.predict(X_test)
+```
+
+```{python}
+mse = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+mae = mean_absolute_error(y_test, y_pred)
+```
+
+```{python}
+
+df_model["predicted"] = rf_model.predict(df_model[["lag1", "rm3"]])
+
+px.line(
+    df_model,
+    x="data",
+    y=["acumulado", "predicted"],
+    labels={"data": "", "value": "Precipitação (mm)", "variable": "Tipo"},
+)
+```
+
+## Conclusão
+
+- Não usei TimeSeriesSplit / Cross-Validation
+
+- Não usei variáveis exógenas
+
+- Podia ter usado mais dados
+
+- Não lidei com hiperparâmetros
