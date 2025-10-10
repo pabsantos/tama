@@ -19,6 +19,8 @@ execute:
 
 ## Introdução
 
+O presente relatório apresenta uma breve análise modelagem e aplicação de um modelo de machine learning com base em série histórica de precipitação na cidade de São Paulo. A análise foi elaborada com auxílio das seguintes bibliotécas:
+
 ```{python}
 import os
 import pandas as pd
@@ -30,6 +32,10 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 ```
 
 ## Dados
+
+Os dados utilizados foram coletados do [Mapa Interativo da Rede Observacional para Monitoramento de Risco de Desastres Naturais do Cemaden](https://mapainterativo.cemaden.gov.br). Foram extraídos os dados de estações pluviométricas da cidade de São Paulo, considerando o período entre 07/2024 e 06/2025. Decidiu-se por focar a análise dos dados coletados pela estação "Centro".
+
+O atributo "datahora" foi dividido em duas colunas distintas, possibilitando o cálculo da precipitação acumulada por dia. Originalmente, o registro dos dados foi realizado em uma frequência horária quando o valor da precipitação foi 0.00 mm e em momentos de precipitação acima de 0, observou-se que o registro foi realizado em uma frequência de 10 minutos. Datas sem registro de dados foram substituídas pelo valor 0.
 
 ```{python}
 data_folder = "../data/"
@@ -57,11 +63,12 @@ data_final = df_diario.data.max()
 date_range = pd.date_range(start=data_inicial, end=data_final, freq="D")
 df_base = pd.DataFrame({"data": date_range})
 df_diario_clean = pd.merge(df_base, df_diario, how="left", on="data").fillna(0)
+df_diario_clean
 ```
 
+O gráfico a seguir apresenta a série temporal diária dos dados. O primeiro ponto de atenção é a falta de dados em alguns períodos. Foi observada a falta de registros nos períodos entre 2024-07-29 e 2024-08-09, 2024-08-10 e 2024-08-24, e 2024-11-13 e 2024-11-29. As datas de 2024-12-21, 2025-02-01 e 2025-02-18 destacam-se pelos maiores valores de precipitação acumulada, com valores de 77.67 mm, 85.72 mm e 53.87 mm, respectivamente.
+
 ```{python}
-# | label: fig-timeseries
-# | fig-cap: Precipitação diária na cidade de SP - Estação "Centro"
 
 px.line(
     df_diario_clean,
@@ -74,13 +81,18 @@ px.line(
 
 ## Modelo
 
+Aplicou-se um modelo de regressão com base no Random Forest. Primeiro, duas novas variáveis explicativas foram criadas: o valor de lag de 1 dia (`lag1`) e a média móvel de 3 dias (`rm3`). A variável dependente é a precipitação acumulada diária. Também foram removidos os valores vazios após essas operações.
+
 ```{python}
 df_diario_clean["lag1"] = df_diario_clean.acumulado.shift(1)
 df_diario_clean["rm3"] = df_diario_clean.acumulado.rolling(window=3).mean().shift(1)
 
 df_model = df_diario_clean.dropna()
+df_model
 ```
 
+
+Da amostra total ($n = 359$), 20% foi separada para o conjunto de teste e o restante foi considerada como o conjunto de treino. Nenhum hiperparâmetro foi modificado no método `RandomForestRegressor`.
 
 ```{python}
 X = df_model[["lag1", "rm3"]]
@@ -105,6 +117,16 @@ rmse = np.sqrt(mse)
 mae = mean_absolute_error(y_test, y_pred)
 ```
 
+O modelo apresentou os seguintes parâmetros de performance:
+
+- Mean squared error (MSE): `{python} f"{mse:.2f}"`
+
+- Root mean squared error (RMSE): `{python} f"{rmse:.2f}"`
+
+- Mean average error (MAE): `{python} f"{mae:.2f}"`
+
+O gráfico a seguir apresenta a série temporal dos valores observados e dos valores previstos através do modelo de Random Forest.
+
 ```{python}
 
 df_model["predicted"] = rf_model.predict(df_model[["lag1", "rm3"]])
@@ -119,10 +141,4 @@ px.line(
 
 ## Conclusão
 
-- Não usei TimeSeriesSplit / Cross-Validation
-
-- Não usei variáveis exógenas
-
-- Podia ter usado mais dados
-
-- Não lidei com hiperparâmetros
+Esse trabalho apresentou brevemente a aplicação de um modelo de machine learning com base em uma série temporal de precipitação acumulada diária, coletada em uma estação do centro da cidade de São Paulo. Como limitações, o trabalho não considerou o uso de cross-validation temporal, com base no `TimeSeriesSplit`. Também não foi considerada nenhuma variável exógena (temperatura, umidade, etc). Uma amostra maior também seria importante para aprimorar a qualidade do modelo.
