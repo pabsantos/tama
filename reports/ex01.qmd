@@ -12,6 +12,7 @@ format:
     code-links:
       - text: Repositório
         icon: github
+        href: https://www.github.com/pabsantos/tama
 execute:
   fig-keep: last
 ---
