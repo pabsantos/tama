@@ -14,6 +14,7 @@ dependencies = [
     "matplotlib>=3.10.6",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
+    "pyts>=0.13.0",
     "scikit-learn>=1.7.2",
     "statsmodels>=0.14.5",
     "tensorflow>=2.20.0",

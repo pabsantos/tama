@@ -18,6 +18,10 @@ execute:
   warning: false
 ---
 
+## Introdução
+
+O presente relatório apresenta a aplicação de uma Rede Neural Recorrente (RNN) do tipo LSTM (*Long Short-Term Memory*) para modelar e prever a série temporal da precipitação diária acumulada.
+
 ```{python}
 import os
 import pandas as pd
@@ -98,6 +102,8 @@ modelo.compile(loss='mean_squared_error', optimizer='adam')
 
 
 ```{python}
+#| output: false
+
 historico = modelo.fit(
     X_treino,
     Y_treino, 
@@ -106,6 +112,13 @@ historico = modelo.fit(
     verbose=1
 )
 
+
+```
+
+
+```{python}
+#| output: false
+
 previsoes_treino = modelo.predict(X_treino)
 previsoes_teste = modelo.predict(X_teste)
 
@@ -113,5 +126,5 @@ previsoes_treino_reais = scaler.inverse_transform(previsoes_treino)
 previsoes_teste_reais = scaler.inverse_transform(previsoes_teste)
 Y_teste_reais = scaler.inverse_transform(Y_teste.reshape(-1, 1))
 
-np.sqrt(mean_squared_error(Y_teste_reais, previsoes_teste_reais))
+mse = np.sqrt(mean_squared_error(Y_teste_reais, previsoes_teste_reais))
 ```
